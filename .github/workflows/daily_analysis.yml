@@ -1,4 +1,4 @@
-、name: 每日股票分析
+name: 每日股票分析
 
 on:
   schedule:
@@ -52,9 +52,7 @@ jobs:
       
       - name: 执行股票分析
         env:
-          # ==========================================
-          # 锁死 OpenAI 兼容接口（你要的这个！）
-          # ==========================================
+          # 锁死 OpenAI 兼容接口（你要的！）
           AI_PROVIDER: openai
           AI_MODEL: deepseek-chat
           AI_BASE_URL: https://api.deepseek.com/v1
@@ -62,13 +60,16 @@ jobs:
           AI_TIMEOUT: '30'
           AI_MAX_RETRIES: '3'
 
-          # ==========================================
-          # 其他配置（保持不变）
-          # ==========================================
-          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+          # 搜索服务
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
+          
+          # 通知渠道
           SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
-          STOCK_LIST: ${{ vars.STOCK_LIST || secrets.STOCK_LIST || '600519' }}
+
+          # 自选股
+          STOCK_LIST: ${{ vars.STOCK_LIST || '600519' }}
+          
+          # 其他配置
           REPORT_TYPE: 'simple'
           LOG_LEVEL: INFO
           MAX_WORKERS: '1'

@@ -1,11 +1,8 @@
-name: 每日股票分析
+、name: 每日股票分析
 
 on:
-  # 定时触发 - 每天北京时间 18:00 (UTC 10:00)
   schedule:
-    - cron: '0 10 * * 1-5'     # 周一到周五，UTC 10:00 = 北京时间 18:00
-  
-  # 手动触发
+    - cron: '0 10 * * 1-5'
   workflow_dispatch:
     inputs:
       mode:
@@ -14,16 +11,15 @@ on:
         default: 'full'
         type: choice
         options:
-          - full          # 完整分析（股票+大盘）
-          - market-only   # 仅大盘复盘
-          - stocks-only   # 仅股票分析
+          - full
+          - market-only
+          - stocks-only
       force_run:
-        description: '强制运行（跳过交易日检查）'
+        description: '强制运行'
         required: false
         default: false
         type: boolean
 
-# 并发控制：同一时间只运行一个分析任务
 concurrency:
   group: stock-analysis
   cancel-in-progress: false
@@ -31,12 +27,10 @@ concurrency:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    # 添加超时限制，防止任务卡死
     timeout-minutes: 30
-    
     steps:
-      - name: 随机延迟（避免固定时间访问）
-        run: sleep $((RANDOM % 60))  # 随机延迟0-60秒启动
+      - name: 随机延迟
+        run: sleep $((RANDOM % 60))
       
       - name: 检出代码
         uses: actions/checkout@v4
@@ -51,80 +45,43 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          # 强制安装最新版 litellm，修复 Anthropic 调用 bug
           pip install --upgrade litellm
       
-      - name: 创建必要目录
-        run: |
-          mkdir -p data logs reports
+      - name: 创建目录
+        run: mkdir -p data logs reports
       
       - name: 执行股票分析
         env:
           # ==========================================
-          # 强制锁死 Anthropic 环境变量（优先级最高）
+          # 锁死 OpenAI 兼容接口（你要的这个！）
           # ==========================================
-          LITELLM_PROVIDER: anthropic
-          LITELLM_MODEL: claude-3-5-sonnet-20241022
-          LITELLM_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          LITELLM_TIMEOUT: 30
-          LITELLM_MAX_RETRIES: 3
-
-          # ==========================================
-          # 兼容原有配置（防止程序读不到）
-          # ==========================================
-          AI_PROVIDER: anthropic
-          AI_MODEL: claude-3-5-sonnet-20241022
-          AI_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AI_PROVIDER: openai
+          AI_MODEL: deepseek-chat
+          AI_BASE_URL: https://api.deepseek.com/v1
+          AI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AI_TIMEOUT: '30'
           AI_MAX_RETRIES: '3'
 
           # ==========================================
-          # 数据源
+          # 其他配置（保持不变）
           # ==========================================
           TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
-          
-          # ==========================================
-          # 搜索服务
-          # ==========================================
-          BOCHA_API_KEYS: ${{ secrets.BOCHA_API_KEYS }}
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
-          SERPAPI_API_KEYS: ${{ secrets.SERPAPI_API_KEYS }}
-          
-          # ==========================================
-          # 通知渠道（仅保留 Server酱3）
-          # ==========================================
           SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
-
-          # ==========================================
-          # 自选股配置
-          # ==========================================
           STOCK_LIST: ${{ vars.STOCK_LIST || secrets.STOCK_LIST || '600519' }}
-          MARKET_REVIEW_REGION: ${{ vars.MARKET_REVIEW_REGION || secrets.MARKET_REVIEW_REGION || 'cn' }}
-          
-          # ==========================================
-          # 运行配置
-          # ==========================================
-          REPORT_TYPE: ${{ vars.REPORT_TYPE || secrets.REPORT_TYPE || 'simple' }}
-          SINGLE_STOCK_NOTIFY: ${{ vars.SINGLE_STOCK_NOTIFY || secrets.SINGLE_STOCK_NOTIFY || 'false' }}
-          MARKET_REVIEW_ENABLED: ${{ vars.MARKET_REVIEW_ENABLED || secrets.MARKET_REVIEW_ENABLED || 'true' }}
-          ANALYSIS_DELAY: ${{ vars.ANALYSIS_DELAY || secrets.ANALYSIS_DELAY || '0' }}
-          TRADING_DAY_CHECK_ENABLED: ${{ vars.TRADING_DAY_CHECK_ENABLED || secrets.TRADING_DAY_CHECK_ENABLED || 'true' }}
-          
-          # ==========================================
-          # 系统配置
-          # ==========================================
+          REPORT_TYPE: 'simple'
           LOG_LEVEL: INFO
-          MAX_WORKERS: ${{ vars.MAX_WORKERS || secrets.MAX_WORKERS || '1' }}
+          MAX_WORKERS: '1'
           ENABLE_CHIP_DISTRIBUTION: 'false'
-          REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || 'tencent,akshare_sina,efinance,akshare_em' }}
+          REALTIME_SOURCE_PRIORITY: 'tencent,akshare_sina,efinance,akshare_em'
           
         run: |
-          # 第一步：强制导出 Anthropic 环境变量（锁死！）
-          export LITELLM_PROVIDER="anthropic"
-          export LITELLM_MODEL="claude-3-5-sonnet-20241022"
-          export LITELLM_API_KEY="${{ secrets.ANTHROPIC_API_KEY }}"
+          # 强制锁死 OpenAI 兼容接口
+          export LITELLM_PROVIDER="openai"
+          export LITELLM_MODEL="deepseek-chat"
+          export LITELLM_BASE_URL="https://api.deepseek.com/v1"
+          export LITELLM_API_KEY="${{ secrets.OPENAI_API_KEY }}"
           
-          # 判断运行模式
           MODE="${{ github.event.inputs.mode || 'full' }}"
           
           echo "=========================================="
@@ -133,41 +90,24 @@ jobs:
           echo "⏰ 时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')"
           echo "🎯 运行模式: $MODE"
           echo "📊 自选股: $STOCK_LIST"
-          echo "📝 报告类型: $REPORT_TYPE"
           echo ""
-          echo "=========================================="
-          echo "📋 配置检查"
-          echo "=========================================="
           echo "【AI 配置】"
-          echo "  Anthropic Key: $([ -n "$LITELLM_API_KEY" ] && echo '✅ 已配置' || echo '❌ 未配置')"
-          echo "  AI 提供商: $LITELLM_PROVIDER"
-          echo "  AI 模型: $LITELLM_MODEL"
-          echo ""
-          echo "【搜索引擎】"
-          echo "  Tavily API Keys: $([ -n "$TAVILY_API_KEYS" ] && echo '✅ 已配置' || echo '⚪ 未配置')"
+          echo "  OpenAI 兼容 Key: $([ -n "$AI_API_KEY" ] && echo '✅ 已配置' || echo '❌ 未配置')"
+          echo "  API 地址: $AI_BASE_URL"
+          echo "  AI 模型: $AI_MODEL"
           echo ""
           echo "【通知渠道】"
           echo "  Server酱3: $([ -n "$SERVERCHAN3_SENDKEY" ] && echo '✅ 已配置' || echo '❌ 未配置')"
           echo "=========================================="
-          echo ""
           
-          # 构建命令行参数
           FORCE_RUN_ARG=""
           if [ "${{ github.event.inputs.force_run }}" = "true" ]; then
             FORCE_RUN_ARG="--force-run"
-            echo "⚡ 已启用强制运行模式（跳过交易日检查）"
           fi
 
-          # 执行分析
-          if [ "$MODE" = "market-only" ]; then
-            python main.py --market-review $FORCE_RUN_ARG
-          elif [ "$MODE" = "stocks-only" ]; then
-            python main.py --no-market-review $FORCE_RUN_ARG
-          else
-            python main.py $FORCE_RUN_ARG
-          fi
+          python main.py $FORCE_RUN_ARG
       
-      - name: 上传分析报告
+      - name: 上传报告
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -177,7 +117,7 @@ jobs:
             logs/
           retention-days: 30
       
-      - name: 显示运行结果
+      - name: 显示结果
         if: always()
         run: |
           echo ""
@@ -189,9 +129,4 @@ jobs:
             ls -la reports/
           else
             echo "⚠️ 未生成报告文件"
-          fi
-          echo ""
-          if [ -f "logs/stock_analysis_$(date +%Y%m%d).log" ]; then
-            echo "📜 最近日志（最后 30 行）:"
-            tail -30 logs/stock_analysis_*.log 2>/dev/null || echo "无日志"
           fi

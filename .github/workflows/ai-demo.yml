@@ -1,0 +1,25 @@
+name: Test AIHubMix Key
+on:
+  push:
+    branches: [ main ]  # 推送到main分支时触发
+  workflow_dispatch:    # 允许手动触发
+
+jobs:
+  test-ai:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test Secret Access
+        env:
+          # 这里就是关键：引用你配置的Secret
+          AIHUBMIX_KEY: ${{ secrets.AIHUBMIX_KEY }}
+        run: |
+          echo "✅ 成功读取到 AIHUBMIX_KEY (长度: ${#AIHUBMIX_KEY})"
+          if [ -z "$AIHUBMIX_KEY" ]; then
+            echo "❌ 密钥为空，请检查Secret名称是否为 AIHUBMIX_KEY"
+            exit 1
+          else
+            echo "✅ 密钥配置正确，可以开始调用AI接口"
+          fi

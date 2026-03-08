@@ -11,15 +11,16 @@ on:
         default: 'full'
         type: choice
         options:
-          - full
-          - market-only
-          - stocks-only
+          - full          # 完整分析（股票+大盘）
+          - market-only   # 仅大盘复盘
+          - stocks-only   # 仅自选股分析
       force_run:
-        description: '强制运行'
+        description: '强制运行（跳过交易日检查）'
         required: false
         default: false
         type: boolean
 
+# 并发控制：同一时间只运行一个分析任务，避免冲突
 concurrency:
   group: stock-analysis
   cancel-in-progress: false
@@ -27,96 +28,118 @@ concurrency:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 30  # 超时保护，防止任务卡死
     steps:
+      # 随机延迟：避免固定时间访问数据源被限流
       - name: 随机延迟
         run: sleep $((RANDOM % 60))
       
+      # 检出仓库代码
       - name: 检出代码
         uses: actions/checkout@v4
       
+      # 设置Python环境（3.11版本兼容性最好）
       - name: 设置 Python 环境
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
+          cache: 'pip'  # 缓存依赖，加速运行
       
+      # 安装依赖（升级litellm修复DeepSeek调用bug）
       - name: 安装依赖
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install --upgrade litellm
       
+      # 创建必要目录（存储数据/日志/报告）
       - name: 创建目录
         run: mkdir -p data logs reports
       
+      # 核心步骤：执行股票分析
       - name: 执行股票分析
         env:
           # ==========================================
-          # 核心：锁死 DeepSeek（OpenAI 兼容接口）
+          # DeepSeek 核心配置（100% 匹配你的Secret）
           # ==========================================
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
-          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}    # DeepSeek的API Key
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}  # DeepSeek的API地址
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}        # DeepSeek的模型（如deepseek-chat）
           
           # ==========================================
           # 其他核心配置（已优化到最稳）
           # ==========================================
-          TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
+          # 通知渠道：Server酱3（微信推送）
           SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
+          # 自选股：读取你配置的601868,002261
           STOCK_LIST: ${{ vars.STOCK_LIST || '600519' }}
+          # 数据源优先级：腾讯（最稳）→ 新浪 → 东方财富 → efinance
+          REALTIME_SOURCE_PRIORITY: 'tencent,akshare_sina,akshare_em,efinance'
+          # 其他系统配置（无需修改）
           REPORT_TYPE: 'simple'
           LOG_LEVEL: INFO
           MAX_WORKERS: '1'
           ENABLE_CHIP_DISTRIBUTION: 'false'
-          REALTIME_SOURCE_PRIORITY: 'tencent,akshare_sina,akshare_em,efinance'
           
         run: |
-          MODE="${{ github.event.inputs.mode || 'full' }}"
-          
+          # 第一步：验证DeepSeek配置是否生效（关键！）
           echo "=========================================="
-          echo "🚀 A股自选股智能分析系统（DeepSeek 稳定版）"
+          echo "🚀 A股自选股智能分析系统（DeepSeek 最终版）"
           echo "=========================================="
-          echo "⏰ 时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')"
-          echo "🎯 运行模式: $MODE"
-          echo "📊 自选股: $STOCK_LIST"
+          echo "⏰ 运行时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')"
+          echo "🎯 运行模式: ${{ github.event.inputs.mode || 'full' }}"
+          echo "📊 自选股列表: $STOCK_LIST"
           echo ""
-          echo "【AI 配置】"
-          echo "  DeepSeek Key: $([ -n "$OPENAI_API_KEY" ] && echo '✅ 已配置' || echo '❌ 未配置')"
+          echo "【DeepSeek 配置验证】"
+          echo "  API Key是否配置: $([ -n "$OPENAI_API_KEY" ] && echo '✅ 已配置' || echo '❌ 未配置')"
           echo "  API 地址: $OPENAI_BASE_URL"
-          echo "  AI 模型: $OPENAI_MODEL"
+          echo "  使用模型: $OPENAI_MODEL"
           echo ""
-          echo "【通知渠道】"
+          echo "【通知渠道验证】"
           echo "  Server酱3: $([ -n "$SERVERCHAN3_SENDKEY" ] && echo '✅ 已配置' || echo '❌ 未配置')"
           echo "=========================================="
-          
+          echo ""
+
+          # 第二步：构建运行参数（强制运行/模式选择）
+          MODE="${{ github.event.inputs.mode || 'full' }}"
           FORCE_RUN_ARG=""
           if [ "${{ github.event.inputs.force_run }}" = "true" ]; then
             FORCE_RUN_ARG="--force-run"
+            echo "⚡ 启用强制运行模式（跳过交易日检查）"
           fi
 
-          python main.py $FORCE_RUN_ARG
+          # 第三步：执行分析脚本（根据模式选择）
+          if [ "$MODE" = "market-only" ]; then
+            python main.py --market-review $FORCE_RUN_ARG
+          elif [ "$MODE" = "stocks-only" ]; then
+            python main.py --no-market-review $FORCE_RUN_ARG
+          else
+            python main.py $FORCE_RUN_ARG
+          fi
       
-      - name: 上传报告
+      # 上传报告：失败也保留日志，方便排查
+      - name: 上传分析报告
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: analysis-reports-${{ github.run_number }}
+          name: stock-analysis-report-${{ github.run_number }}
           path: |
-            reports/
+            data/
             logs/
-          retention-days: 30
+            reports/
+          retention-days: 30  # 报告保留30天
       
-      - name: 显示结果
+      # 显示运行结果：直观看到是否生成报告
+      - name: 显示最终结果
         if: always()
         run: |
           echo ""
           echo "=========================================="
-          echo "📊 分析完成"
+          echo "📊 分析任务执行完成"
           echo "=========================================="
-          if [ -d "reports" ] && [ "$(ls -A reports/2>/dev/null)" ]; then
-            echo "✅ 生成的报告:"
+          if [ -d "reports" ] && [ "$(ls -A reports/ 2>/dev/null)" ]; then
+            echo "✅ 成功生成分析报告，文件列表："
             ls -la reports/
           else
-            echo "⚠️ 未生成报告文件"
+            echo "⚠️ 未生成报告文件（可检查日志或重试）"
           fi

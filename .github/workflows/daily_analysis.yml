@@ -53,10 +53,11 @@ jobs:
       - name: 执行股票分析
         env:
           # ==========================================
-          # 核心：锁死 AIHubMix（无需科学上网，必成功）
+          # 核心：锁死 DeepSeek（OpenAI 兼容接口）
           # ==========================================
-          AIHUBMIX_KEY: ${{ secrets.AIHUBMIX_KEY }}
-          OPENAI_MODEL: deepseek-chat  # 或 glm-4, gpt-4o-free 等免费模型
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           
           # ==========================================
           # 其他核心配置（已优化到最稳）
@@ -74,14 +75,15 @@ jobs:
           MODE="${{ github.event.inputs.mode || 'full' }}"
           
           echo "=========================================="
-          echo "🚀 A股自选股智能分析系统（AIHubMix 稳定版）"
+          echo "🚀 A股自选股智能分析系统（DeepSeek 稳定版）"
           echo "=========================================="
           echo "⏰ 时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')"
           echo "🎯 运行模式: $MODE"
           echo "📊 自选股: $STOCK_LIST"
           echo ""
           echo "【AI 配置】"
-          echo "  AIHubMix Key: $([ -n "$AIHUBMIX_KEY" ] && echo '✅ 已配置' || echo '❌ 未配置')"
+          echo "  DeepSeek Key: $([ -n "$OPENAI_API_KEY" ] && echo '✅ 已配置' || echo '❌ 未配置')"
+          echo "  API 地址: $OPENAI_BASE_URL"
           echo "  AI 模型: $OPENAI_MODEL"
           echo ""
           echo "【通知渠道】"
@@ -112,7 +114,7 @@ jobs:
           echo "=========================================="
           echo "📊 分析完成"
           echo "=========================================="
-          if [ -d "reports" ] && [ "$(ls -A reports 2>/dev/null)" ]; then
+          if [ -d "reports" ] && [ "$(ls -A reports/2>/dev/null)" ]; then
             echo "✅ 生成的报告:"
             ls -la reports/
           else

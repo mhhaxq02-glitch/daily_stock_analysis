@@ -52,12 +52,12 @@ jobs:
       
       - name: 执行股票分析
         env:
-          # 👇 此处为修改后的密钥（已替换为你提供的新密钥）
-          OPENAI_API_KEY: sk-c0a3d7794c16450aaa739889cd3805a9
+          # 仅使用你已配置的 Secret，完全移除 AIHUBMIX_KEY 引用
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           
-          # 其他核心配置
+          # 其他你已配置的 Secret
           SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
           STOCK_LIST: ${{ vars.STOCK_LIST || '600519' }}
@@ -116,7 +116,7 @@ jobs:
           echo "=========================================="
           echo "📊 分析完成"
           echo "=========================================="
-          if [ -d "reports" ] && [ "$(ls -A reports/ 2>/dev/null)" ]; then
+          if [ -d "reports" ] && [ -n "$(ls -A reports/ 2>/dev/null)" ]; then
             echo "✅ 成功生成分析报告"
           else
             echo "⚠️ 未生成报告文件"

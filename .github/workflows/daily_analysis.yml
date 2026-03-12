@@ -52,8 +52,8 @@ jobs:
       
       - name: 执行股票分析
         env:
-          # DeepSeek 核心配置（100% 匹配你的 Secret）
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # 👇 此处为修改后的密钥（已替换为你提供的新密钥）
+          OPENAI_API_KEY: sk-c0a3d7794c16450aaa739889cd3805a9
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           
